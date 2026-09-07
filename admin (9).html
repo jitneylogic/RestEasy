@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Manage Reps</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+    :root {
+        --color-bg-dark: #223129;
+        --color-box-translucent: rgba(255, 255, 255, 0.05);
+        --color-sage-accent: #4C9170;
+        --color-mint-soft: #8DC4AA;
+        --text-on-dark: #f8fafc;
+        --danger: #ef4444;
+        --focus-glow: rgba(76, 145, 112, 0.2);
+    }
+    * { box-sizing: border-box; }
+    body {
+        margin: 0; min-height: 100vh; font-family: 'Manrope', system-ui, sans-serif;
+        background: var(--color-bg-dark); color: var(--text-on-dark);
+        display: flex; justify-content: center; padding: 48px 20px;
+    }
+    h1 { font-family: 'Fraunces', serif; font-size: 26px; font-weight: 500; margin: 0 0 8px; }
+    p.subtitle { margin: 0 0 28px; font-size: 13px; color: var(--color-mint-soft); }
+    #page { width: 100%; max-width: 480px; }
+    .form-section {
+        background: var(--color-box-translucent); border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px; padding: 24px; margin-bottom: 20px;
+    }
+    .add-row { display: flex; gap: 10px; margin-bottom: 8px; }
+    input {
+        flex: 1; padding: 12px; border-radius: 8px; font-size: 14px; font-family: inherit;
+        border: 1px solid rgba(255,255,255,0.2); background: rgba(0,0,0,0.15); color: #fff;
+    }
+    input:focus { border-color: var(--color-sage-accent); outline: none; box-shadow: 0 0 0 3px var(--focus-glow); }
+    button {
+        background: var(--color-sage-accent); color: #fff; border: none; padding: 12px 18px;
+        border-radius: 8px; font-weight: 700; cursor: pointer; font-family: inherit; font-size: 13px;
+    }
+    button:hover { background: #3d7a5c; }
+    .rep-row {
+        display: flex; justify-content: space-between; align-items: center;
+        padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .rep-row:last-child { border-bottom: none; }
+    .rep-name { font-size: 15px; }
+    .rep-name.inactive { color: rgba(248,250,252,0.4); text-decoration: line-through; }
+    .rep-actions button { padding: 6px 12px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .btn-toggle { background: rgba(255,255,255,0.1); margin-right: 6px; }
+    .btn-toggle:hover { background: rgba(255,255,255,0.18); }
+    .btn-delete { background: var(--danger); }
+    .btn-delete:hover { background: #dc2626; }
+    #status { margin-top: 12px; font-size: 13px; min-height: 18px; }
+    #status.error { color: var(--danger); }
+    #status.success { color: var(--color-mint-soft); }
+    .empty-note { color: rgba(248,250,252,0.5); font-size: 13px; }
+</style>
+</head>
+<body>
+
+<div id="page">
+    <h1>Manage Reps</h1>
+    <p class="subtitle">Reps added here show up immediately in the call logger's dropdown. Marking a rep inactive hides them from new submissions without deleting their history.</p>
+
+    <div class="form-section">
+        <div class="add-row">
+            <input type="text" id="new-rep-name" placeholder="New rep name">
+            <button type="button" onclick="addRep()">Add</button>
+        </div>
+        <div id="status"></div>
+    </div>
+
+    <div class="form-section" id="rep-list">
+        <div class="empty-note">Loading...</div>
+    </div>
+</div>
+
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, doc, updateDoc, deleteDoc, getDocs, query, orderBy } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    // Same config as index.html - keep both in sync.
+    const firebaseConfig = {
+        apiKey: "PASTE_YOUR_API_KEY",
+        authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+        projectId: "PASTE_YOUR_PROJECT_ID",
+        storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+        messagingSenderId: "PASTE_YOUR_SENDER_ID",
+        appId: "PASTE_YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+    signInAnonymously(auth).catch((err) => console.error("Auth failed:", err));
+
+    const repList = document.getElementById('rep-list');
+    const status = document.getElementById('status');
+    const newRepInput = document.getElementById('new-rep-name');
+
+    async function loadReps() {
+        const q = query(collection(db, 'reps'), orderBy('name'));
+        const snap = await getDocs(q);
+        if (snap.empty) {
+            repList.innerHTML = '<div class="empty-note">No reps yet — add one above.</div>';
+            return;
+        }
+        repList.innerHTML = '';
+        snap.forEach((docSnap) => {
+            const data = docSnap.data();
+            const row = document.createElement('div');
+            row.className = 'rep-row';
+            row.innerHTML = `
+                <span class="rep-name ${data.active === false ? 'inactive' : ''}">${data.name}</span>
+                <span class="rep-actions">
+                    <button class="btn-toggle" onclick="window.__toggleRep('${docSnap.id}', ${data.active === false})">${data.active === false ? 'Reactivate' : 'Deactivate'}</button>
+                    <button class="btn-delete" onclick="window.__deleteRep('${docSnap.id}', '${data.name}')">Delete</button>
+                </span>
+            `;
+            repList.appendChild(row);
+        });
+    }
+
+    window.addRep = async function () {
+        const name = newRepInput.value.trim();
+        if (!name) return;
+        try {
+            await addDoc(collection(db, 'reps'), { name, active: true });
+            newRepInput.value = '';
+            status.textContent = `${name} added.`;
+            status.className = 'success';
+            loadReps();
+        } catch (err) {
+            console.error(err);
+            status.textContent = 'Could not add rep — check Firebase config.';
+            status.className = 'error';
+        }
+    };
+
+    window.__toggleRep = async function (id, reactivate) {
+        await updateDoc(doc(db, 'reps', id), { active: reactivate });
+        loadReps();
+    };
+
+    window.__deleteRep = async function (id, name) {
+        if (!confirm(`Delete ${name}? This only removes them from the rep list — their past submissions are untouched.`)) return;
+        await deleteDoc(doc(db, 'reps', id));
+        loadReps();
+    };
+
+    loadReps();
+</script>
+
+</body>
+</html>

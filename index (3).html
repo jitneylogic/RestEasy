@@ -1,0 +1,749 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Call Logger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,300;9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+    /* ==========================================================
+       Design tokens — lifted directly from the uploaded cockpit
+       (enterprisecockpit-setter.html) so this form matches it.
+       ========================================================== */
+    :root {
+        --color-bg-dark: #223129;
+        --color-box-translucent: rgba(255, 255, 255, 0.05);
+        --color-border-deep: #1E5E3F;
+        --color-sage-accent: #4C9170;
+        --color-mint-soft: #8DC4AA;
+        --color-white: #ffffff;
+        --text-on-dark: #f8fafc;
+        --gold-accent: #D9A441;
+        --gold-dim: rgba(217, 164, 65, 0.14);
+        --focus-glow: rgba(76, 145, 112, 0.2);
+        --shadow-soft: 0 4px 6px -1px rgba(0,0,0,0.1), 0 2px 4px -1px rgba(0,0,0,0.06);
+        --danger: #ef4444;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        min-height: 100vh;
+        font-family: 'Manrope', system-ui, -apple-system, sans-serif;
+        background: var(--color-bg-dark);
+        color: var(--text-on-dark);
+        display: flex;
+        justify-content: center;
+        padding: 48px 20px;
+    }
+
+    h1, h2 { font-family: 'Fraunces', serif; margin: 0; }
+
+    #page {
+        width: 100%;
+        max-width: 640px;
+    }
+
+    header {
+        margin-bottom: 28px;
+    }
+
+    header h1 {
+        font-size: 26px;
+        font-weight: 500;
+        letter-spacing: -0.01em;
+        color: var(--text-on-dark);
+    }
+
+    header p {
+        margin: 8px 0 0;
+        font-size: 13px;
+        color: var(--color-mint-soft);
+    }
+
+    .form-section {
+        background: var(--color-box-translucent);
+        border: 1px solid rgba(255,255,255,0.1);
+        border-radius: 12px;
+        padding: 24px;
+        margin-bottom: 20px;
+    }
+
+    .form-section h2 {
+        font-size: 15px;
+        font-weight: 500;
+        color: var(--color-mint-soft);
+        border-bottom: 2px solid rgba(255,255,255,0.1);
+        padding-bottom: 10px;
+        margin-bottom: 18px;
+    }
+
+    .form-group { margin-bottom: 18px; }
+    .form-group:last-child { margin-bottom: 0; }
+
+    .grid-2 { display: flex; gap: 15px; margin-bottom: 18px; }
+    .grid-2 .form-group { flex: 1; margin-bottom: 0; }
+
+    label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+        font-size: 11px;
+        text-transform: uppercase;
+        color: var(--color-mint-soft);
+        letter-spacing: 0.5px;
+    }
+
+    label .req { color: var(--gold-accent); margin-left: 2px; }
+
+    input, select, textarea {
+        width: 100%;
+        padding: 12px;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        border: 1px solid rgba(255,255,255,0.2);
+        background: rgba(0,0,0,0.15);
+        color: #ffffff;
+        transition: all 0.15s;
+    }
+
+    select { cursor: pointer; }
+
+    input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.35); }
+
+    input:focus, select:focus, textarea:focus {
+        border-color: var(--color-sage-accent);
+        outline: none;
+        box-shadow: 0 0 0 3px var(--focus-glow);
+    }
+
+    /* Nested / dependent field blocks get a left accent rail so the
+       conditional hierarchy is visible at a glance. */
+    .subfield {
+        border-left: 2px solid var(--color-sage-accent);
+        padding-left: 16px;
+        margin-top: 4px;
+        margin-bottom: 18px;
+    }
+    .subfield[hidden] { display: none; }
+
+    .helper-text {
+        font-size: 12px;
+        color: rgba(248,250,252,0.6);
+        margin: -8px 0 16px;
+    }
+
+    .note-box {
+        font-size: 13px;
+        color: var(--color-mint-soft);
+        background: rgba(0,0,0,0.15);
+        border: 1px dashed rgba(255,255,255,0.2);
+        border-radius: 8px;
+        padding: 12px 14px;
+    }
+
+    .btn-primary {
+        width: 100%;
+        background: var(--color-sage-accent);
+        color: white;
+        border: none;
+        padding: 16px;
+        font-size: 15px;
+        font-weight: 700;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    .btn-primary:hover { background: #3d7a5c; transform: translateY(-1px); }
+    .btn-primary:active { transform: translateY(1px); }
+
+    #submit-status {
+        margin-top: 12px;
+        font-size: 13px;
+        text-align: center;
+        min-height: 18px;
+    }
+    #submit-status.error { color: var(--danger); }
+    #submit-status.success { color: var(--color-mint-soft); }
+
+</style>
+
+<!-- =====================================================================
+     FIREBASE SETUP — replace this config with your own project's config.
+     Create a project at https://console.firebase.google.com, enable
+     Firestore and Anonymous Authentication, then Project Settings ->
+     your web app -> copy the config object here.
+     ===================================================================== -->
+<script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getFirestore, collection, addDoc, getDocs, query, orderBy, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+    import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
+
+    const firebaseConfig = {
+        apiKey: "PASTE_YOUR_API_KEY",
+        authDomain: "PASTE_YOUR_PROJECT.firebaseapp.com",
+        projectId: "PASTE_YOUR_PROJECT_ID",
+        storageBucket: "PASTE_YOUR_PROJECT.appspot.com",
+        messagingSenderId: "PASTE_YOUR_SENDER_ID",
+        appId: "PASTE_YOUR_APP_ID"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getFirestore(app);
+    const auth = getAuth(app);
+
+    // Anonymous auth — not a real login, just a lightweight way to keep
+    // random internet traffic from writing to the database. Every real
+    // browser session gets a token; nothing that isn't this page can write.
+    signInAnonymously(auth).catch((err) => console.error("Auth failed:", err));
+
+    window.__db = db;
+    window.__fsFns = { collection, addDoc, getDocs, query, orderBy, onSnapshot, serverTimestamp };
+</script>
+
+</head>
+<body>
+
+<div id="page">
+    <header>
+        <h1>Call Logger</h1>
+        <p>Fields are dynamic based on your selections below.</p>
+    </header>
+
+    <form id="logger-form" novalidate>
+
+        <!-- ============ ALWAYS-PRESENT FIELDS ============ -->
+        <div class="form-section">
+            <h2>Basics</h2>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="customerPhone">Customer Phone Number<span class="req">*</span></label>
+                    <input type="tel" id="customerPhone" class="logic-field" placeholder="(801) 555-0199" required>
+                </div>
+                <div class="form-group">
+                    <label for="salesRep">Sales Rep<span class="req">*</span></label>
+                    <select id="salesRep" class="logic-field" required>
+                        <option value="">-- Select Rep --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="submissionType">Submission Type<span class="req">*</span></label>
+                <select id="submissionType" class="logic-field" required>
+                    <option value="">-- Select Type --</option>
+                    <option value="inbound_call">Inbound Call</option>
+                    <option value="sale_submission">Sale Submission</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- ============ INBOUND CALL PATH ============ -->
+        <div class="form-section subfield" id="section-inbound-call" hidden>
+            <h2>Inbound Call Details</h2>
+
+            <div class="form-group">
+                <label for="callType">Call Type<span class="req">*</span></label>
+                <select id="callType" class="logic-field">
+                    <option value="">-- Select Call Type --</option>
+                    <option value="customer_service">Customer Service</option>
+                    <option value="retention">Retention</option>
+                    <option value="inbound_sales">Inbound Sales Opportunity</option>
+                    <option value="commercial">Commercial Call</option>
+                </select>
+            </div>
+
+            <!-- Customer Service: nothing further -->
+            <div class="subfield" id="block-customer-service" hidden>
+                <div class="note-box">No additional info needed — ready to submit.</div>
+            </div>
+
+            <!-- Commercial Call: nothing further (for now) -->
+            <div class="subfield" id="block-commercial" hidden>
+                <div class="note-box">No additional info needed yet — commercial call details will be added later. Ready to submit.</div>
+            </div>
+
+            <!-- Retention -->
+            <div class="subfield" id="block-retention" hidden>
+                <div class="form-group">
+                    <label for="retentionOutcome">Was the account saved or cancelled?<span class="req">*</span></label>
+                    <select id="retentionOutcome" class="logic-field">
+                        <option value="">-- Select Outcome --</option>
+                        <option value="saved">Saved</option>
+                        <option value="cancelled">Cancelled</option>
+                    </select>
+                </div>
+
+                <div class="subfield" id="block-retention-cancelled" hidden>
+                    <div class="form-group">
+                        <label for="cancelReason">Cancellation Reason<span class="req">*</span></label>
+                        <select id="cancelReason" class="logic-field">
+                            <option value="">-- Select Reason --</option>
+                            <option>Filler 1</option>
+                            <option>Filler 2</option>
+                            <option>Filler 3</option>
+                            <option>Filler 4</option>
+                            <option>Filler 5</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="subfield" id="block-retention-saved" hidden>
+                    <div class="form-group">
+                        <label for="discountAmount">How much was discounted?<span class="req">*</span></label>
+                        <input type="number" id="discountAmount" class="logic-field" placeholder="0.00" min="0" step="0.01">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inbound Sales Opportunity -->
+            <div class="subfield" id="block-inbound-sales" hidden>
+                <div class="form-group">
+                    <label for="salesOutcome">Sold or Not Sold?<span class="req">*</span></label>
+                    <select id="salesOutcome" class="logic-field">
+                        <option value="">-- Select Outcome --</option>
+                        <option value="sold">Sold</option>
+                        <option value="not_sold">Not Sold</option>
+                    </select>
+                </div>
+
+                <div class="subfield" id="block-not-sold" hidden>
+                    <div class="form-group">
+                        <label for="notSoldReason">Reason Not Sold<span class="req">*</span></label>
+                        <select id="notSoldReason" class="logic-field">
+                            <option value="">-- Select Reason --</option>
+                            <option value="Spouse Objection">Spouse Objection</option>
+                            <option value="Too Expensive">Too Expensive</option>
+                            <option value="Not the decision maker">Not the decision maker</option>
+                            <option value="Didn't want full agreement">Didn't want full agreement</option>
+                            <option value="Other">Other</option>
+                        </select>
+                    </div>
+                    <div class="subfield" id="block-not-sold-other" hidden>
+                        <div class="form-group">
+                            <label for="otherReasonText">Please explain<span class="req">*</span></label>
+                            <textarea id="otherReasonText" class="logic-field" rows="2" placeholder="What happened?"></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sale-details block gets moved in here when Sold -->
+                <div id="anchor-inbound-sold" hidden></div>
+            </div>
+        </div>
+
+        <!-- ============ SALE SUBMISSION PATH ============ -->
+        <div class="form-section subfield" id="section-sale-submission" hidden>
+            <h2>Sale Submission Details</h2>
+
+            <div class="form-group">
+                <label for="saleType">Sale Type<span class="req">*</span></label>
+                <select id="saleType" class="logic-field">
+                    <option value="">-- Select Sale Type --</option>
+                    <option value="inbound_call_sale">Inbound Call Sale</option>
+                    <option value="outbound_call_sale">Outbound Call Sale</option>
+                </select>
+            </div>
+
+            <div class="subfield" id="block-lead-source" hidden>
+                <div class="form-group">
+                    <label for="leadSource">Lead Source<span class="req">*</span></label>
+                    <select id="leadSource" class="logic-field">
+                        <option value="">-- Select Source --</option>
+                        <option value="Marketing Lead">Marketing Lead</option>
+                        <option value="AI Lead">AI Lead</option>
+                        <option value="Technician Lead">Technician Lead</option>
+                        <option value="Follow-up Call">Follow-up Call</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Sale-details block gets moved in here (sale submission is always treated as sold) -->
+            <div id="anchor-sale-submission" hidden></div>
+        </div>
+
+        <!-- ============ SHARED "SALE DETAILS" BLOCK ============
+             One physical instance in the DOM; JS moves it into whichever
+             anchor is active (inbound-sales→Sold, or Sale Submission),
+             so there's a single source of truth for package/price logic. -->
+        <div class="subfield" id="sale-details-block" hidden>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label for="package">Package<span class="req">*</span></label>
+                    <select id="package" class="logic-field">
+                        <option value="">-- Select Package --</option>
+                        <option>General</option>
+                        <option>Ultimate</option>
+                        <option>One Time</option>
+                        <option>Inspection</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="paymentMethod">Payment Method<span class="req">*</span></label>
+                    <select id="paymentMethod" class="logic-field">
+                        <option value="">-- Select Method --</option>
+                        <option value="None">None</option>
+                        <option value="Credit Card">Credit Card</option>
+                        <option value="ACH">ACH</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="form-group">
+                    <label id="initial-price-label" for="initialPrice">Initial Price<span class="req">*</span></label>
+                    <select id="initialPrice" class="logic-field">
+                        <option value="">-- Select Price --</option>
+                        <option value="150">$150</option>
+                        <option value="100">$100</option>
+                        <option value="50">$50</option>
+                    </select>
+                </div>
+                <div class="form-group" id="monthly-price-group">
+                    <label for="monthlyPrice">Monthly Price<span class="req">*</span></label>
+                    <select id="monthlyPrice" class="logic-field">
+                        <option value="">-- Select Price --</option>
+                        <option value="100">$100</option>
+                        <option value="75">$75</option>
+                        <option value="55">$55</option>
+                    </select>
+                </div>
+            </div>
+            <p class="helper-text" id="one-time-note" hidden>One Time / Inspection packages carry a single price — no recurring monthly charge.</p>
+        </div>
+
+        <button type="submit" class="btn-primary">Submit</button>
+        <div id="submit-status"></div>
+    </form>
+</div>
+
+<script>
+(function () {
+    'use strict';
+
+    // ---- Element handles -------------------------------------------------
+    const el = (id) => document.getElementById(id);
+
+    const customerPhone   = el('customerPhone');
+    const salesRep        = el('salesRep');
+    const submissionType  = el('submissionType');
+
+    const sectionInbound  = el('section-inbound-call');
+    const sectionSale     = el('section-sale-submission');
+
+    const callType        = el('callType');
+    const blockCS         = el('block-customer-service');
+    const blockCommercial = el('block-commercial');
+    const blockRetention  = el('block-retention');
+    const blockInboundSales = el('block-inbound-sales');
+
+    const retentionOutcome   = el('retentionOutcome');
+    const blockCancelled     = el('block-retention-cancelled');
+    const cancelReason       = el('cancelReason');
+    const blockSaved         = el('block-retention-saved');
+    const discountAmount     = el('discountAmount');
+
+    const salesOutcome       = el('salesOutcome');
+    const blockNotSold       = el('block-not-sold');
+    const notSoldReason      = el('notSoldReason');
+    const blockNotSoldOther  = el('block-not-sold-other');
+    const otherReasonText    = el('otherReasonText');
+    const anchorInboundSold  = el('anchor-inbound-sold');
+
+    const saleType           = el('saleType');
+    const blockLeadSource    = el('block-lead-source');
+    const leadSource         = el('leadSource');
+    const anchorSaleSubmission = el('anchor-sale-submission');
+
+    const saleDetailsBlock   = el('sale-details-block');
+    const packageSelect      = el('package');
+    const initialPriceLabel  = el('initial-price-label');
+    const initialPrice       = el('initialPrice');
+    const monthlyPriceGroup  = el('monthly-price-group');
+    const monthlyPrice       = el('monthlyPrice');
+    const paymentMethod      = el('paymentMethod');
+    const oneTimeNote        = el('one-time-note');
+
+    const submitStatus       = el('submit-status');
+    const form                = el('logger-form');
+
+    const SINGLE_PRICE_PACKAGES = ['One Time', 'Inspection'];
+
+    // ---- Helpers -----------------------------------------------------------
+    function show(node)  { node.hidden = false; }
+    function hide(node)  { node.hidden = true; }
+
+    // Clears every input/select/textarea inside a container. Called whenever
+    // a branch is hidden, so stale values from an abandoned path never leak
+    // into the final payload.
+    function clearWithin(container) {
+        container.querySelectorAll('input, select, textarea').forEach((f) => {
+            f.value = '';
+        });
+    }
+
+    function hideAndClear(node) {
+        clearWithin(node);
+        hide(node);
+    }
+
+    // Moves the shared sale-details block into the given anchor and shows it.
+    function mountSaleDetails(anchor) {
+        anchor.appendChild(saleDetailsBlock);
+        show(anchor);
+        show(saleDetailsBlock);
+    }
+
+    function unmountSaleDetails() {
+        hideAndClear(saleDetailsBlock);
+    }
+
+    // ---- Core render: walks the whole tree top to bottom -------------------
+    function render() {
+        const subType = submissionType.value;
+
+        // Top-level branch: Inbound Call vs Sale Submission
+        if (subType === 'inbound_call') {
+            show(sectionInbound);
+        } else {
+            hideAndClear(sectionInbound);
+        }
+        if (subType === 'sale_submission') {
+            show(sectionSale);
+        } else {
+            hideAndClear(sectionSale);
+        }
+
+        // ---- Inbound Call branch ----
+        if (subType === 'inbound_call') {
+            const ct = callType.value;
+
+            ct === 'customer_service' ? show(blockCS) : hideAndClear(blockCS);
+            ct === 'commercial' ? show(blockCommercial) : hideAndClear(blockCommercial);
+
+            if (ct === 'retention') {
+                show(blockRetention);
+                const outcome = retentionOutcome.value;
+
+                if (outcome === 'cancelled') { show(blockCancelled); } else { hideAndClear(blockCancelled); }
+                if (outcome === 'saved') { show(blockSaved); } else { hideAndClear(blockSaved); }
+            } else {
+                hideAndClear(blockRetention);
+            }
+
+            if (ct === 'inbound_sales') {
+                show(blockInboundSales);
+                const outcome = salesOutcome.value;
+
+                if (outcome === 'not_sold') {
+                    show(blockNotSold);
+                    if (notSoldReason.value === 'Other') { show(blockNotSoldOther); }
+                    else { hideAndClear(blockNotSoldOther); }
+                } else {
+                    hideAndClear(blockNotSold);
+                }
+
+                if (outcome === 'sold') {
+                    mountSaleDetails(anchorInboundSold);
+                } else if (saleDetailsBlock.parentElement === anchorInboundSold) {
+                    unmountSaleDetails();
+                    hide(anchorInboundSold);
+                }
+            } else {
+                hideAndClear(blockInboundSales);
+                if (saleDetailsBlock.parentElement === anchorInboundSold) {
+                    unmountSaleDetails();
+                    hide(anchorInboundSold);
+                }
+            }
+        }
+
+        // ---- Sale Submission branch (always treated as sold) ----
+        if (subType === 'sale_submission') {
+            const st = saleType.value;
+
+            if (st === 'outbound_call_sale') {
+                show(blockLeadSource);
+            } else {
+                hideAndClear(blockLeadSource);
+            }
+
+            if (st === 'inbound_call_sale' || st === 'outbound_call_sale') {
+                mountSaleDetails(anchorSaleSubmission);
+            } else if (saleDetailsBlock.parentElement === anchorSaleSubmission) {
+                unmountSaleDetails();
+                hide(anchorSaleSubmission);
+            }
+        } else if (saleDetailsBlock.parentElement === anchorSaleSubmission) {
+            unmountSaleDetails();
+            hide(anchorSaleSubmission);
+        }
+
+        // ---- Package -> price field behavior (shared block) ----
+        if (!saleDetailsBlock.hidden) {
+            const pkg = packageSelect.value;
+            if (SINGLE_PRICE_PACKAGES.includes(pkg)) {
+                initialPriceLabel.firstChild.textContent = 'Price ';
+                hideAndClear(monthlyPriceGroup);
+                show(oneTimeNote);
+            } else {
+                initialPriceLabel.firstChild.textContent = 'Initial Price ';
+                show(monthlyPriceGroup);
+                hide(oneTimeNote);
+            }
+        }
+
+    }
+
+    // ---- Payload assembly ---------------------------------------------------
+    // Builds only the keys relevant to whatever path is currently active.
+    // This is the shape we'll hand to Firestore / the webhook next.
+    function buildPayload() {
+        const payload = {
+            customerPhone: customerPhone.value.trim(),
+            salesRep: salesRep.value,
+            submissionType: submissionType.value
+        };
+
+        if (submissionType.value === 'inbound_call') {
+            payload.callType = callType.value;
+
+            if (callType.value === 'retention') {
+                payload.retention = {
+                    outcome: retentionOutcome.value
+                };
+                if (retentionOutcome.value === 'cancelled') {
+                    payload.retention.cancelReason = cancelReason.value;
+                } else if (retentionOutcome.value === 'saved') {
+                    payload.retention.discountAmount = discountAmount.value ? Number(discountAmount.value) : null;
+                }
+            }
+
+            if (callType.value === 'inbound_sales') {
+                payload.inboundSales = { outcome: salesOutcome.value };
+                if (salesOutcome.value === 'not_sold') {
+                    payload.inboundSales.notSoldReason = notSoldReason.value;
+                    if (notSoldReason.value === 'Other') {
+                        payload.inboundSales.otherReasonText = otherReasonText.value.trim();
+                    }
+                }
+                if (salesOutcome.value === 'sold') {
+                    payload.inboundSales.saleDetails = buildSaleDetails();
+                }
+            }
+        }
+
+        if (submissionType.value === 'sale_submission') {
+            payload.saleType = saleType.value;
+            if (saleType.value === 'outbound_call_sale') {
+                payload.leadSource = leadSource.value;
+            }
+            if (saleType.value === 'inbound_call_sale' || saleType.value === 'outbound_call_sale') {
+                payload.saleDetails = buildSaleDetails();
+            }
+        }
+
+        return payload;
+    }
+
+    function buildSaleDetails() {
+        const pkg = packageSelect.value;
+        const details = {
+            package: pkg,
+            paymentMethod: paymentMethod.value
+        };
+        if (SINGLE_PRICE_PACKAGES.includes(pkg)) {
+            details.price = initialPrice.value ? Number(initialPrice.value) : null;
+        } else {
+            details.initialPrice = initialPrice.value ? Number(initialPrice.value) : null;
+            details.monthlyPrice = monthlyPrice.value ? Number(monthlyPrice.value) : null;
+        }
+        return details;
+    }
+
+    // ---- Wire up events ------------------------------------------------------
+    document.querySelectorAll('.logic-field').forEach((f) => {
+        f.addEventListener('change', render);
+    });
+
+    // ---- Load reps from Firestore (populated/edited via admin.html) --------
+    async function loadReps() {
+        const { collection, getDocs, query, orderBy } = window.__fsFns;
+        const db = window.__db;
+        try {
+            const q = query(collection(db, 'reps'), orderBy('name'));
+            const snap = await getDocs(q);
+            salesRep.innerHTML = '<option value="">-- Select Rep --</option>';
+            snap.forEach((doc) => {
+                const data = doc.data();
+                if (data.active === false) return;
+                const opt = document.createElement('option');
+                opt.value = data.name;
+                opt.textContent = data.name;
+                salesRep.appendChild(opt);
+            });
+        } catch (err) {
+            console.error('Could not load reps:', err);
+            submitStatus.textContent = 'Could not load rep list — check Firebase config.';
+            submitStatus.className = 'error';
+        }
+    }
+
+    // ---- Submit: write to Firestore ------------------------------------------
+    form.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        const payload = buildPayload();
+
+        const missing = [];
+        if (!payload.customerPhone) missing.push('Customer Phone Number');
+        if (!payload.salesRep) missing.push('Sales Rep');
+        if (!payload.submissionType) missing.push('Submission Type');
+
+        if (missing.length) {
+            submitStatus.textContent = 'Missing: ' + missing.join(', ');
+            submitStatus.className = 'error';
+            return;
+        }
+
+        // Stable-core fields — the ONLY fields a leaderboard or summary
+        // report should ever read. Computed once, here, so that adding or
+        // reshaping detail fields elsewhere never touches this logic.
+        const soldDetails = payload.saleDetails || (payload.inboundSales && payload.inboundSales.saleDetails) || null;
+        const sold = Boolean(soldDetails);
+        const price = soldDetails
+            ? (soldDetails.price ?? soldDetails.initialPrice ?? null)
+            : null;
+
+        const record = {
+            ...payload,
+            sold,
+            price,
+            timestamp: window.__fsFns.serverTimestamp()
+        };
+
+        try {
+            const { collection, addDoc } = window.__fsFns;
+            await addDoc(collection(window.__db, 'submissions'), record);
+            submitStatus.textContent = 'Logged successfully.';
+            submitStatus.className = 'success';
+            form.reset();
+            render();
+        } catch (err) {
+            console.error('Write failed:', err);
+            submitStatus.textContent = 'Something went wrong — not saved. Check your connection and try again.';
+            submitStatus.className = 'error';
+        }
+    });
+
+    render();
+    loadReps();
+})();
+</script>
+
+</body>
+</html>
